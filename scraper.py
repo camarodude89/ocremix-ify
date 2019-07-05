@@ -1,8 +1,9 @@
 from requests_html import HTMLSession
 import math
 import re
+import time
 from datetime import datetime
-from multiprocessing import pool, Manager
+from multiprocessing import Pool, Manager
 
 BASE_URL = 'http://ocremix.org'
 pages_url_dict = {
@@ -15,7 +16,7 @@ pages_url_dict = {
 session = HTMLSession()
 # manager = Manager()
 # remix_dict = manager.dict()
-remix_dict = {}
+# remix_dict = {}
 remix_count = 0
 game_count = 0
 
@@ -77,7 +78,7 @@ def generate_complete_url_list(system_dict):
     return all_urls
 
 
-def scrape_system_remixes_to_dict(url):
+def scrape_system_remixes_to_dict(remix_dict, url):
     page = session.get(url)
     remix_table_body = page.html.find(r'#main-content > div:nth-child(1) > div > div:nth-child(2) >'
                                       r' section > div > table > tbody', first=True)
@@ -136,24 +137,37 @@ def scrape_system_remixes_to_dict(url):
             month_date = td_tags[2].text.replace('\n', '')
             # year = td_tags[2].find('span', first=True).text
             posted_date = datetime.strptime(month_date, '%b %d%Y').date()
-            # noinspection PyTypeChecker
-            remix_dict[game_name][remix] = {
+            # The below dance of dictionaries is due to the following excerpt from documentation:
+            # Modifications to mutable values or items in dict and list proxies will not be propagated
+            # through the manager, because the proxy has no way of knowing when its values or items are modified.
+            # To modify such an item, you can re-assign the modified object to the container proxy
+            # Without this, the individual remix dictionaries is not persisted in the containing remix_dict
+            d = remix_dict[game_name]
+            d[remix] = {
                 'yt_link': yt_link,
                 'songs_arranged': songs_arranged,
                 'remixers': remixers,
                 'posted_date': posted_date.strftime('%Y-%m-%d')
             }
-
-    import json
-    print(json.dumps(remix_dict, indent=4))
+            remix_dict[game_name] = d
 
 
 def main():
+    before = time.time()
     system_dict = scrape_systems_to_dict()
     all_urls = generate_complete_url_list(system_dict)
-    for url in all_urls:
-        scrape_system_remixes_to_dict(url)
-    print(f'Total # of Games: {game_count}\nTotal # of Remixes: {remix_count}')
+    with Manager() as manager:
+        remix_dict = manager.dict()
+        p = Pool(10)
+        for url in all_urls:
+            p.apply_async(scrape_system_remixes_to_dict, args=(remix_dict, url))
+        p.close()
+        p.join()
+        after = time.time()
+        import json
+        print(json.dumps(dict(remix_dict), indent=4))
+        print(f'Total # of Games: {game_count}\nTotal # of Remixes: {remix_count}')
+        print(f'Execution time: {str(after - before)}')
 
 
 if __name__ == '__main__':
