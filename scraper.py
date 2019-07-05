@@ -2,6 +2,7 @@ from requests_html import HTMLSession
 import math
 import re
 from datetime import datetime
+from multiprocessing import pool, Manager
 
 BASE_URL = 'http://ocremix.org'
 pages_url_dict = {
@@ -12,6 +13,9 @@ pages_url_dict = {
     'artists': '/artists/'
 }
 session = HTMLSession()
+# manager = Manager()
+# remix_dict = manager.dict()
+remix_dict = {}
 
 
 def get_request_count():
@@ -64,24 +68,29 @@ def scrape_systems_to_dict():
     return system_dict
 
 
+def generate_complete_url_list():
+    pass
+
+
 def scrape_system_remixes_to_dict(system_url):
     url_list = [f'{system_url}/remixes']
     r = session.get(url_list[0])
 
     # Grabs the total number of remix results for the system
-    result_count = int(r.html.find(
-        r'#main-content > div:nth-child(1) > div > div:nth-child(2) > section > div > nav:nth-child(1) >'
-        r' ul > li:nth-child(1) > a',
-        first=True).text.split()[-1])
+    try:
+        result_count = int(r.html.find(
+            r'#main-content > div:nth-child(1) > div > div:nth-child(2) > section > div > nav:nth-child(1) >'
+            r' ul > li:nth-child(1) > a',
+            first=True).text.split()[-1])
+    # This will be thrown if there is no result count due to all results fitting on one page.
+    except AttributeError:
+        result_count = 1
 
     # URL parameter for result offset
     offset = 0
     for x in range(math.floor(result_count / 30)):
         offset += 30
         url_list.append(f'{system_url}/remixes?&offset={offset}')
-
-    remix_dict = {}
-    game_name_set = set()
 
     for url in url_list:
         page = session.get(url)
@@ -112,9 +121,10 @@ def scrape_system_remixes_to_dict(system_url):
                 img_request = session.get(BASE_URL + img_tag.attrs['src'].replace(r'thumbs/150', 'img-size/500'))
                 if img_request.status_code == 200:
                     # formats the game name, inserts the system, and users proper file extension for image
-                    game_name_reg = r"[\s|\.|(\:\s)]+"
+                    game_name_reg = r"[\s|\.|\*|\/|(\:\s)]+"
                     file_name = f'images/{re.sub(game_name_reg, "-", game_name).lower()}-{system_url.split("/")[-1]}' \
                                 f'-title.{img_url.split(".")[-1]}'
+                    file_name = file_name.replace('"', '')
                     with open(file_name, 'wb') as f:
                         f.write(img_request.content)
                 remix_dict[game_name] = {
@@ -137,6 +147,7 @@ def scrape_system_remixes_to_dict(system_url):
                 month_date = td_tags[2].text.replace('\n', '')
                 # year = td_tags[2].find('span', first=True).text
                 posted_date = datetime.strptime(month_date, '%b %d%Y').date()
+                # noinspection PyTypeChecker
                 remix_dict[game_name][remix] = {
                     'yt_link': yt_link,
                     'songs_arranged': songs_arranged,
@@ -144,51 +155,15 @@ def scrape_system_remixes_to_dict(system_url):
                     'posted_date': posted_date.strftime('%Y-%m-%d')
                 }
 
-
-        # content = remix_table_body.find('td')
-        # for td in content:
-        #     if 'valign' in td.attrs and 'colspan' in td.attrs:
-        #         a_tag = td.find('a')
-        #         game_name = a_tag[1].text.strip()
-        #         game_name_set.add(game_name)
-        #         if len(a_tag) == 3:
-        #             composers = a_tag[2].text.strip()
-        #         else:
-        #             composers = ', '.join([composer.text.strip() for composer in a_tag[2:]])
-        #         if game_name not in remix_dict:
-        #             remix_dict[game_name] = {
-        #                 # Accounts for those games without composers
-        #                 'composers': composers if composers else 'Unknown',
-        #                 # 'remix': {
-        #                 #     'yt_link': None,
-        #                 #     'songs_arranged': None,
-        #                 #     'remixers': None,
-        #                 #     'posted_date': None
-        #                 # }
-        #             }
-        #     # Grabs the posted date of the remix
-        #     if 'nowrap' in td.attrs:
-        #         posted_date = td.text
-        #         print(posted_date.replace('\n', ' '))
-        #
-        #     # Grabs the remixer
-        #     if 'Arranged By' in td.text:
-        #         a_tag = td.find('a')
-        #         remixer = a_tag[0].text
-
-            # Grab the name of the remixes and place into remix_dict
-
-    # game_name_list = list(game_name_set)
-    # game_name_list.sort()
-    # for k, v in remix_dict.items():
-    #     print(f'{k} - {v["composers"]}')
     import json
     print(json.dumps(remix_dict, indent=4))
 
 
 def main():
     system_dict = scrape_systems_to_dict()
-    scrape_system_remixes_to_dict(system_dict['Nintendo 64']['link'])
+    for k, v in system_dict.items():
+        print(k)
+        scrape_system_remixes_to_dict(system_dict[k]['link'])
     # get_request_count()
 
 
