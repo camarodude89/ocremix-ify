@@ -14,11 +14,6 @@ pages_url_dict = {
     'artists': '/artists/'
 }
 session = HTMLSession()
-# manager = Manager()
-# remix_dict = manager.dict()
-# remix_dict = {}
-remix_count = 0
-game_count = 0
 
 
 def get_request_count():
@@ -65,15 +60,15 @@ def scrape_systems_to_dict():
 
 def generate_complete_url_list(system_dict):
     all_urls = []
-    for k, v in system_dict.items():
-        remix_count = int(v['remix_count'])
-        all_urls.append(''.join([v['link'], pages_url_dict['remixes']]))
+    for system in system_dict.values():
+        remix_count = int(system['remix_count'])
+        all_urls.append(''.join([system['link'], pages_url_dict['remixes']]))
         if remix_count > 30:
             # URL parameter for result offset
             offset = 0
             for x in range(math.floor(remix_count / 30)):
                 offset += 30
-                all_urls.append(f'{v["link"]}/remixes?&offset={offset}')
+                all_urls.append(f'{system["link"]}/remixes?&offset={offset}')
 
     return all_urls
 
@@ -167,7 +162,7 @@ def main():
         import json
         print(json.dumps(dict(remix_dict), indent=4))
         print(f'Total # of Games: {game_count}\nTotal # of Remixes: {remix_count}')
-        print(f'Execution time: {str(after - before)}')
+        print(f'Execution time: {after - before:.2f}')
 
 
 if __name__ == '__main__':
