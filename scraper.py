@@ -88,8 +88,8 @@ def scrape_system_remixes_to_dict(remix_dict, url):
             if game_name in remix_dict:
                 continue
             else:
-                global game_count
-                game_count += 1
+                # global game_count
+                # game_count += 1
                 print(game_name)
             # grab image url
             img_tag = a_tags[0].find('img', first=True)
@@ -116,8 +116,6 @@ def scrape_system_remixes_to_dict(remix_dict, url):
                 'image': file_name
             }
         else:
-            global remix_count
-            remix_count += 1
             td_tags = tr.find('td')
             # grab remix name
             a_tags = td_tags[0].find('a')
@@ -161,7 +159,6 @@ def main():
         after = time.time()
         import json
         print(json.dumps(dict(remix_dict), indent=4))
-        print(f'Total # of Games: {game_count}\nTotal # of Remixes: {remix_count}')
         print(f'Execution time: {after - before:.2f}')
 
 
